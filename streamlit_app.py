@@ -6,7 +6,8 @@ import numpy as np
 import skfuzzy as fuzz
 import pandas as pd
 import os
-
+import heapq
+from math import radians, sin, cos, sqrt, atan2
 
 
 class EvacuationSystem:
@@ -39,13 +40,98 @@ class EvacuationSystem:
             "Ingay": [24.0, 28.7]
         }
         
+        # Build graph structure for A* - connections between barangays
+        self.graph_connections = self._build_graph_connections()
+        
         self.travel_data = {}
         if self.kml_file_path:
             self.load_kml_paths()
         if self.excel_filepaths:
             self.load_all_travel_data()
 
+    def _build_graph_connections(self):
+        """
+        Build graph connections based on which barangays have direct paths.
+        In a real scenario, this would be based on actual road connections.
+        For now, we assume all barangays connect directly to Poblacion (star topology).
+        """
+        connections = {
+            "Poblacion": ["Bobon", "Gines", "Bacolod", "Lonoc", "Binolbog", 
+                         "Barangbang", "Carolina", "Ingay"],
+            "Bobon": ["Poblacion", "Gines", "Bacolod"],  
+            "Gines": ["Poblacion", "Bobon", "Bacolod"],
+            "Bacolod": ["Poblacion", "Bobon", "Gines", "Ingay"],
+            "Lonoc": ["Poblacion", "Binolbog"],
+            "Binolbog": ["Poblacion", "Lonoc"],
+            "Barangbang": ["Poblacion", "Carolina"],
+            "Carolina": ["Poblacion", "Barangbang"],
+            "Ingay": ["Poblacion", "Bacolod"]
+        }
+        return connections
 
+    def haversine_distance(self, coord1, coord2):
+        """
+        Calculate the great circle distance between two points 
+        on the earth (specified in decimal degrees).
+        Returns distance in kilometers.
+        """
+        lat1, lon1 = coord1
+        lat2, lon2 = coord2
+        
+        # Convert to radians
+        lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+        
+        # Haversine formula
+        dlat = lat2 - lat1
+        dlon = lon2 - lon1
+        a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+        c = 2 * atan2(sqrt(a), sqrt(1-a))
+        
+        # Radius of earth in kilometers
+        r = 6371
+        
+        return r * c
+
+    def heuristic(self, node, goal):
+        """
+        Heuristic function for A* - uses straight-line distance (Haversine)
+        """
+        if node not in self.barangays or goal not in self.barangays:
+            return float('inf')
+        
+        return self.haversine_distance(self.barangays[node], self.barangays[goal])
+
+    def get_edge_cost(self, from_node, to_node):
+        """
+        Calculate the actual cost to travel from one node to another.
+        Uses fuzzy logic evaluation if travel data is available.
+        """
+        # Check if we have travel data for this edge
+        if to_node in self.travel_data:
+            segments = self.travel_data[to_node]
+            total_cost = 0
+            total_time = 0
+            
+            for seg in segments:
+                total_cost += self.fuzzy_evaluation(
+                    seg['slope'], 
+                    seg['travel_time'], 
+                    seg['curvature']
+                )
+                total_time += seg['travel_time']
+            
+            return total_cost, total_time
+        
+        # Fallback to distance-based cost if no travel data
+        distance = self.haversine_distance(
+            self.barangays[from_node], 
+            self.barangays[to_node]
+        )
+        # Assume average speed of 30 km/h for time estimate
+        estimated_time = (distance / 30) * 60  # in minutes
+        estimated_cost = distance * 0.5  # Simple cost model
+        
+        return estimated_cost, estimated_time
 
     def load_kml_paths(self):
         """Load KML paths with improved error handling"""
@@ -88,8 +174,6 @@ class EvacuationSystem:
             
         except Exception as e:
             st.error(f"❌ Error loading KML file: {e}")
-
-
 
     def load_all_travel_data(self):
         """Load travel data from Excel files"""
@@ -137,8 +221,6 @@ class EvacuationSystem:
         if loaded_count > 0:
             st.success(f"✅ Loaded travel data for {loaded_count} barangays")
 
-
-
     def fuzzy_evaluation(self, slope, travel_time, curvature):
         """Evaluate path segment using fuzzy logic"""
         # Slope membership functions
@@ -150,8 +232,6 @@ class EvacuationSystem:
         slope_level_med = fuzz.interp_membership(x_slope, slope_med, slope)
         slope_level_high = fuzz.interp_membership(x_slope, slope_high, slope)
 
-
-
         # Travel time membership functions
         x_time = np.arange(0, 31, 1)
         time_fast = fuzz.trimf(x_time, [0, 0, 10])
@@ -160,8 +240,6 @@ class EvacuationSystem:
         time_level_fast = fuzz.interp_membership(x_time, time_fast, travel_time)
         time_level_avg = fuzz.interp_membership(x_time, time_avg, travel_time)
         time_level_slow = fuzz.interp_membership(x_time, time_slow, travel_time)
-
-
 
         # Curvature membership functions
         x_curv = np.arange(0, 1.1, 0.01)
@@ -172,8 +250,6 @@ class EvacuationSystem:
         curv_level_med = fuzz.interp_membership(x_curv, curv_med, curvature)
         curv_level_high = fuzz.interp_membership(x_curv, curv_high, curvature)
 
-
-
         # Fuzzy rules
         cost_low = np.fmin(np.fmin(np.fmin(slope_level_low, time_level_fast), curv_level_low), 0.1)
         cost_med = np.fmin(np.fmax(np.fmax(slope_level_med, time_level_avg), curv_level_med), 0.5)
@@ -181,41 +257,104 @@ class EvacuationSystem:
         cost = np.fmax(cost_low, np.fmax(cost_med, cost_high))
         return cost
 
-
-
     def a_star_path(self, start, goal):
         """
-        Find best evacuation path using A* algorithm with fuzzy logic
+        TRUE A* ALGORITHM implementation with fuzzy logic edge costs.
         Returns tuple: (barangay_name, cost, time, distance)
+        
+        A* Algorithm components:
+        - g(n): actual cost from start to node n
+        - h(n): heuristic (estimated cost from n to goal)
+        - f(n): g(n) + h(n) (total estimated cost)
+        - Uses priority queue to explore nodes with lowest f(n) first
         """
-        graph = {}
-        for barangay, segments in self.travel_data.items():
+        # Priority queue: (f_cost, g_cost, current_node, path, total_time)
+        open_set = []
+        heapq.heappush(open_set, (0, 0, start, [start], 0))
+        
+        # Track best cost to reach each node
+        best_g_cost = {start: 0}
+        
+        # Closed set - already evaluated nodes
+        closed_set = set()
+        
+        # Store all valid paths to goal
+        valid_paths = []
+        
+        while open_set:
+            f_cost, g_cost, current, path, total_time = heapq.heappop(open_set)
+            
+            # Check if we reached the goal
+            if current.lower() == goal.lower() or goal.lower() in current.lower():
+                # Get distance for this path
+                distance = None
+                if current in self.distances:
+                    distance = min(self.distances[current])
+                
+                valid_paths.append((current, g_cost, total_time, distance, path))
+                # Continue to explore other paths for comparison
+                continue
+            
+            # Skip if already evaluated
+            if current in closed_set:
+                continue
+            
+            closed_set.add(current)
+            
+            # Get neighbors from graph connections
+            neighbors = self.graph_connections.get(current, [])
+            
+            for neighbor in neighbors:
+                if neighbor in closed_set:
+                    continue
+                
+                # Calculate edge cost using fuzzy logic
+                edge_cost, edge_time = self.get_edge_cost(current, neighbor)
+                
+                # Calculate g(n) - actual cost from start to neighbor
+                new_g_cost = g_cost + edge_cost
+                new_total_time = total_time + edge_time
+                
+                # Check if this is a better path to neighbor
+                if neighbor not in best_g_cost or new_g_cost < best_g_cost[neighbor]:
+                    best_g_cost[neighbor] = new_g_cost
+                    
+                    # Calculate h(n) - heuristic (straight-line distance to goal)
+                    h_cost = self.heuristic(neighbor, goal)
+                    
+                    # Calculate f(n) = g(n) + h(n)
+                    f_cost = new_g_cost + h_cost
+                    
+                    # Add to priority queue
+                    new_path = path + [neighbor]
+                    heapq.heappush(open_set, (f_cost, new_g_cost, neighbor, new_path, new_total_time))
+        
+        # Return the best path (minimum cost)
+        if valid_paths:
+            best_path = min(valid_paths, key=lambda x: x[1])  # Sort by cost
+            return best_path[:4]  # Return (barangay_name, cost, time, distance)
+        
+        # Fallback: if no path found via A*, use direct connection
+        if goal in self.travel_data:
+            segments = self.travel_data[goal]
             total_cost = 0
             total_time = 0
+            
             for seg in segments:
-                total_cost += self.fuzzy_evaluation(seg['slope'], seg['travel_time'], seg['curvature'])
+                total_cost += self.fuzzy_evaluation(
+                    seg['slope'], 
+                    seg['travel_time'], 
+                    seg['curvature']
+                )
                 total_time += seg['travel_time']
-            graph[barangay] = {"cost": total_cost, "time": total_time}
+            
+            distance = None
+            if goal in self.distances:
+                distance = min(self.distances[goal])
+            
+            return (goal, total_cost, total_time, distance)
         
-        # Find matching barangays
-        candidates = [(name, data["cost"], data["time"]) for name, data in graph.items() 
-                     if goal.lower() in name.lower()]
-        
-        if not candidates:
-            return None
-        
-        # Find the best path (minimum cost)
-        best = min(candidates, key=lambda x: x[1])
-        barangay_name = best[0]
-        
-        # Get the corresponding distance
-        distance = None
-        if barangay_name in self.distances:
-            distance = min(self.distances[barangay_name])
-        
-        return (best[0], best[1], best[2], distance)
-
-
+        return None
 
     def create_evacuation_map(self, selected_barangay=None):
         """Create interactive folium map with Esri satellite imagery"""
@@ -241,8 +380,6 @@ class EvacuationSystem:
                 icon=folium.Icon(color=color)
             ).add_to(m)
 
-
-
         if selected_barangay and selected_barangay != self.evacuation_center:
             # Draw all available paths in gray
             for path_name, coords in self.evacuation_paths.items():
@@ -254,9 +391,7 @@ class EvacuationSystem:
                     tooltip=f"Path: {path_name}"
                 ).add_to(m)
 
-
-
-            # Highlight the best path in red
+            # Highlight the best path in red (found via A*)
             best_path = self.a_star_path(self.evacuation_center, selected_barangay)
             if best_path:
                 path_name = f"Poblacion to {selected_barangay}"
@@ -267,11 +402,10 @@ class EvacuationSystem:
                         color='red',
                         weight=6,
                         opacity=0.9,
-                        tooltip=f"Best Path: {path_name}"
+                        tooltip=f"Best Path (A*): {path_name}"
                     ).add_to(m)
         
         return m
-
 
 
 def load_embedded_files():
@@ -292,7 +426,6 @@ def load_embedded_files():
                 excel_files.append(file_path)
     
     return kml_file, excel_files
-
 
 
 def main():
@@ -347,11 +480,11 @@ def main():
         st.markdown("---")
         st.markdown("### ℹ️ About")
         st.markdown("""
-        This system uses **fuzzy logic** and **A* algorithm** to calculate 
-        the optimal evacuation route based on:
+        **Edge costs based on:**
         - 🏔️ Road slope
         - ⏱️ Travel time
         - 🛣️ Path curvature
+    
         """)
         
     # Main content area
@@ -409,7 +542,7 @@ def main():
                 best_path = system.a_star_path(system.evacuation_center, selected_barangay)
                 
                 if best_path:
-                    st.success("✅ Best Route Found!")
+                    st.success("✅ Best Route Found (A* Algorithm)!")
                     
                     # Display metrics
                     metric_col1, metric_col2 = st.columns(2)
@@ -442,7 +575,6 @@ def main():
             # Show map without selection
             default_map = system.create_evacuation_map()
             st_folium(default_map, width=1200, height=500, returned_objects=[])
-
 
 
 if __name__ == "__main__":
