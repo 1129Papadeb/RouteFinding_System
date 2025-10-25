@@ -8,6 +8,7 @@ import pandas as pd
 import os
 
 
+
 class EvacuationSystem:
     def __init__(self, kml_file_path=None, excel_filepaths=None):
         self.kml_file_path = kml_file_path
@@ -43,6 +44,7 @@ class EvacuationSystem:
             self.load_kml_paths()
         if self.excel_filepaths:
             self.load_all_travel_data()
+
 
 
     def load_kml_paths(self):
@@ -86,6 +88,7 @@ class EvacuationSystem:
             
         except Exception as e:
             st.error(f"❌ Error loading KML file: {e}")
+
 
 
     def load_all_travel_data(self):
@@ -135,6 +138,7 @@ class EvacuationSystem:
             st.success(f"✅ Loaded travel data for {loaded_count} barangays")
 
 
+
     def fuzzy_evaluation(self, slope, travel_time, curvature):
         """Evaluate path segment using fuzzy logic"""
         # Slope membership functions
@@ -147,6 +151,7 @@ class EvacuationSystem:
         slope_level_high = fuzz.interp_membership(x_slope, slope_high, slope)
 
 
+
         # Travel time membership functions
         x_time = np.arange(0, 31, 1)
         time_fast = fuzz.trimf(x_time, [0, 0, 10])
@@ -155,6 +160,7 @@ class EvacuationSystem:
         time_level_fast = fuzz.interp_membership(x_time, time_fast, travel_time)
         time_level_avg = fuzz.interp_membership(x_time, time_avg, travel_time)
         time_level_slow = fuzz.interp_membership(x_time, time_slow, travel_time)
+
 
 
         # Curvature membership functions
@@ -167,12 +173,14 @@ class EvacuationSystem:
         curv_level_high = fuzz.interp_membership(x_curv, curv_high, curvature)
 
 
+
         # Fuzzy rules
         cost_low = np.fmin(np.fmin(np.fmin(slope_level_low, time_level_fast), curv_level_low), 0.1)
         cost_med = np.fmin(np.fmax(np.fmax(slope_level_med, time_level_avg), curv_level_med), 0.5)
         cost_high = np.fmin(np.fmax(np.fmax(slope_level_high, time_level_slow), curv_level_high), 0.9)
         cost = np.fmax(cost_low, np.fmax(cost_med, cost_high))
         return cost
+
 
 
     def a_star_path(self, start, goal):
@@ -208,10 +216,19 @@ class EvacuationSystem:
         return (best[0], best[1], best[2], distance)
 
 
+
     def create_evacuation_map(self, selected_barangay=None):
-        """Create interactive folium map with evacuation routes"""
+        """Create interactive folium map with Esri satellite imagery"""
         map_center = self.barangays[self.evacuation_center]
-        m = folium.Map(location=map_center, zoom_start=12)
+        
+        # Create map with Esri Satellite imagery
+        m = folium.Map(
+            location=map_center, 
+            zoom_start=12,
+            tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+            attr='Esri',
+            name='Esri Satellite'
+        )
         
         # Add markers for all barangays
         for name, coords in self.barangays.items():
@@ -225,6 +242,7 @@ class EvacuationSystem:
             ).add_to(m)
 
 
+
         if selected_barangay and selected_barangay != self.evacuation_center:
             # Draw all available paths in gray
             for path_name, coords in self.evacuation_paths.items():
@@ -235,6 +253,7 @@ class EvacuationSystem:
                     opacity=0.5,
                     tooltip=f"Path: {path_name}"
                 ).add_to(m)
+
 
 
             # Highlight the best path in red
@@ -252,6 +271,7 @@ class EvacuationSystem:
                     ).add_to(m)
         
         return m
+
 
 
 def load_embedded_files():
@@ -272,6 +292,7 @@ def load_embedded_files():
                 excel_files.append(file_path)
     
     return kml_file, excel_files
+
 
 
 def main():
@@ -307,9 +328,6 @@ def main():
         
         # Show status       
         # Display loaded data statistics
-        if st.session_state.system and st.session_state.system.evacuation_paths:
-            st.metric("Routes Loaded", len(st.session_state.system.evacuation_paths))
-        
         if st.session_state.system and st.session_state.system.travel_data:
             st.metric("Barangays with Data", len(st.session_state.system.travel_data))
         else:
@@ -419,13 +437,12 @@ def main():
                     st.warning("⚠️ No travel data available for this barangay")
             
             with col2:
-                # ✅ FIX: Added returned_objects=[] to prevent reloads on map clicks
                 st_folium(evacuation_map, width=900, height=600, returned_objects=[])
         else:
             # Show map without selection
             default_map = system.create_evacuation_map()
-            # ✅ FIX: Added returned_objects=[] to prevent reloads on map clicks
             st_folium(default_map, width=1200, height=500, returned_objects=[])
+
 
 
 if __name__ == "__main__":
