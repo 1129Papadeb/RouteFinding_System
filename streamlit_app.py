@@ -430,12 +430,12 @@ def load_embedded_files():
 
 def main():
     st.set_page_config(
-        page_title="Leon Evacuation System",
+        page_title="SAFE Route",
         page_icon="🚨",
         layout="wide"
     )
-    
-    st.title("🚨 Leon Evacuation System")
+
+    st.title("🚨 SAFE Route (Smart Alert and Fast Evacuation with Rerouting Technology)")
     
     # Initialize session state
     if 'system' not in st.session_state:
