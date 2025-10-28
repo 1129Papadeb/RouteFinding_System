@@ -1,4 +1,4 @@
-# 🚨 Leon Evacuation System
+# 🚨 SAFE Route
 
 An intelligent evacuation route planning system using **A* pathfinding algorithm** and **fuzzy logic** to determine optimal evacuation paths in Leon, Iloilo, Philippines.
 
@@ -22,7 +22,7 @@ An intelligent evacuation route planning system using **A* pathfinding algorithm
 
 ## 🌟 Overview
 
-The Leon Evacuation System is a web-based application designed to help emergency responders and local government units plan optimal evacuation routes during disasters. The system combines advanced pathfinding algorithms with real-world road conditions to recommend the safest and most efficient evacuation paths.
+The SAFE Route (Smart Alert and Fast Evacuation with Rerouting Technology) is a web-based application designed to help emergency responders and local government units plan optimal evacuation routes during disasters. The system combines advanced pathfinding algorithms with real-world road conditions to recommend the safest and most efficient evacuation paths.
 
 ### Key Technologies
 
