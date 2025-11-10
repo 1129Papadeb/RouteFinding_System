@@ -35,7 +35,6 @@ class EvacuationSystem:
             "Carolina": [7.06, 7.23],
             "Ingay": [24.0, 28.7]
         }
-        # Block path 1 for each barangay
         self.blocked_paths = {
             "Poblacion to Bobon",
             "Poblacion to Gines",
@@ -100,7 +99,7 @@ class EvacuationSystem:
             self.barangays[from_node], 
             self.barangays[to_node]
         )
-        estimated_time = (distance / 30) * 60
+        estimated_time = (distance / 40) * 60
         estimated_cost = distance * 0.5
         return estimated_cost, estimated_time
 
@@ -238,7 +237,7 @@ class EvacuationSystem:
             zoom_start=12,
             tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
             attr='Esri',
-            name='Esri Satellite'
+            name='Esri World Imagery Satellite'
         )
         for name, coords in self.barangays.items():
             color = "red" if name == self.evacuation_center else "blue"
@@ -381,7 +380,7 @@ def main():
             col1, col2 = st.columns([1, 2])
             with col1:
                 st.markdown("### 📊 Evacuation Details")
-                st.markdown("**Based Speed: 40 kph**")  # Added based speed info here
+                st.markdown("**Based Speed: 40 kph**")
                 best_path_name = system.best_unblocked_path(selected_barangay)
                 best_index = None
                 if best_path_name:
@@ -410,8 +409,7 @@ def main():
                     if travel_barangay_name in system.travel_data:
                         total_time = sum(seg['travel_time'] for seg in system.travel_data[travel_barangay_name])
                     else:
-                        # Change fallback speed to 40 kph for transparency
-                        total_time = dist / 40 * 60  
+                        total_time = dist / 40 * 60  # Use 40 kph
                     st.success("✅ Best Route Found ")
                     metric_col1, metric_col2 = st.columns(2)
                     with metric_col1:
@@ -435,12 +433,20 @@ def main():
                         tag_str = (" (" + ", ".join(tags) + ")") if tags else ""
                         st.write(f"Path {i}: {dist} km{tag_str}")
             with col2:
-                st.markdown("**Map Name:** Esri Satellite")
+                st.markdown("**Map Name:** Esri World Imagery Satellite")
                 st_folium(evacuation_map, width=900, height=600, returned_objects=[])
         else:
             default_map = system.create_evacuation_map()
-            st.markdown("**Map Name:** Esri Satellite")
+            st.markdown("**Map Name:** Esri World Imagery Satellite")
             st_folium(default_map, width=1200, height=500, returned_objects=[])
+
+    # Custom developer footer
+    st.markdown("""
+        <hr style='border:1px solid #bbb'>
+        <div style='text-align:center; font-weight:bold; color:gray;'>
+            Developed by Mel Elijah C. Amar &copy; 2025
+        </div>
+    """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
