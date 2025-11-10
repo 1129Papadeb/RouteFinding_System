@@ -381,6 +381,7 @@ def main():
             col1, col2 = st.columns([1, 2])
             with col1:
                 st.markdown("### 📊 Evacuation Details")
+                st.markdown("**Based Speed: 40 kph**")  # Added based speed info here
                 best_path_name = system.best_unblocked_path(selected_barangay)
                 best_index = None
                 if best_path_name:
@@ -409,7 +410,8 @@ def main():
                     if travel_barangay_name in system.travel_data:
                         total_time = sum(seg['travel_time'] for seg in system.travel_data[travel_barangay_name])
                     else:
-                        total_time = dist / 30 * 60  # Fallback: assume 30 km/h
+                        # Change fallback speed to 40 kph for transparency
+                        total_time = dist / 40 * 60  
                     st.success("✅ Best Route Found ")
                     metric_col1, metric_col2 = st.columns(2)
                     with metric_col1:
