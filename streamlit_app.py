@@ -434,9 +434,11 @@ def main():
                         tag_str = (" (" + ", ".join(tags) + ")") if tags else ""
                         st.write(f"Path {i}: {dist} km{tag_str}")
             with col2:
+                st.markdown("**Map Layer:** Esri Satellite")
                 st_folium(evacuation_map, width=900, height=600, returned_objects=[])
         else:
             default_map = system.create_evacuation_map()
+            st.markdown("**Map Layer:** Esri Satellite")
             st_folium(default_map, width=1200, height=500, returned_objects=[])
 
 if __name__ == "__main__":
