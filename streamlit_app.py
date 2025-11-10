@@ -8,6 +8,10 @@ import pandas as pd
 import os
 from math import radians, sin, cos, sqrt, atan2
 
+# Hide Streamlit branding/footer
+st.set_option('ui.hideStreamlitLogo', True)
+st.set_option('server.headless', True)
+
 class EvacuationSystem:
     def __init__(self, kml_file_path=None, excel_filepaths=None):
         self.kml_file_path = kml_file_path
@@ -35,7 +39,6 @@ class EvacuationSystem:
             "Carolina": [7.06, 7.23],
             "Ingay": [24.0, 28.7]
         }
-        # Block path 1 for each barangay
         self.blocked_paths = {
             "Poblacion to Bobon",
             "Poblacion to Gines",
@@ -100,7 +103,7 @@ class EvacuationSystem:
             self.barangays[from_node], 
             self.barangays[to_node]
         )
-        estimated_time = (distance / 30) * 60
+        estimated_time = (distance / 40) * 60
         estimated_cost = distance * 0.5
         return estimated_cost, estimated_time
 
@@ -381,7 +384,7 @@ def main():
             col1, col2 = st.columns([1, 2])
             with col1:
                 st.markdown("### 📊 Evacuation Details")
-                st.markdown("**Based Speed: 40 kph**")  # Added based speed info here
+                st.markdown("**Based Speed: 40 kph**")  # Based speed info
                 best_path_name = system.best_unblocked_path(selected_barangay)
                 best_index = None
                 if best_path_name:
@@ -410,8 +413,7 @@ def main():
                     if travel_barangay_name in system.travel_data:
                         total_time = sum(seg['travel_time'] for seg in system.travel_data[travel_barangay_name])
                     else:
-                        # Change fallback speed to 40 kph for transparency
-                        total_time = dist / 40 * 60  
+                        total_time = dist / 40 * 60  # Use 40 kph base speed
                     st.success("✅ Best Route Found ")
                     metric_col1, metric_col2 = st.columns(2)
                     with metric_col1:
